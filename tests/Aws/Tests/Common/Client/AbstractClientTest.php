@@ -23,8 +23,8 @@ use Aws\Common\Enum\Region;
 use Aws\Common\Signature\SignatureV4;
 use Aws\Common\Signature\SignatureListener;
 use Aws\Common\Credentials\Credentials;
+use Aws\DynamoDb\DynamoDbClient;
 use Guzzle\Common\Collection;
-use Guzzle\Plugin\Backoff\BackoffPlugin;
 use Guzzle\Service\Description\ServiceDescription;
 
 /**
@@ -138,9 +138,10 @@ class AbstractClientTest extends \Guzzle\Tests\GuzzleTestCase
         $client = $this->getServiceBuilder()->get('dynamodb', true);
         $client->getConfig()->set('scheme', 'https');
         foreach (array_keys($client->getRegions()) as $region) {
+            $suffix = (strpos($region, 'cn-') === 0) ? '.cn' : '';
             $client->setRegion($region);
-            $this->assertEquals("https://dynamodb.{$region}.amazonaws.com", (string) $client->getBaseUrl());
-            $this->assertEquals("https://dynamodb.{$region}.amazonaws.com", $client->getConfig('base_url'));
+            $this->assertEquals("https://dynamodb.{$region}.amazonaws.com{$suffix}", (string) $client->getBaseUrl());
+            $this->assertEquals("https://dynamodb.{$region}.amazonaws.com{$suffix}", $client->getConfig('base_url'));
             $this->assertEquals($region, $client->getRegion());
             $this->assertEquals($region, $this->readAttribute($client->getSignature(), 'regionName'));
         }
@@ -271,5 +272,22 @@ class AbstractClientTest extends \Guzzle\Tests\GuzzleTestCase
     {
         $client = $this->getServiceBuilder()->get('dynamodb', true);
         $this->assertNotNull($client->getApiVersion());
+    }
+
+    /**
+     * @expectedException \Aws\Common\Exception\TransferException
+     */
+    public function testWrapsCurlExceptions()
+    {
+        $this->getServiceBuilder()->get('dynamodb', true);
+        $client = DynamoDbClient::factory(array(
+            'key'            => 'foo',
+            'secret'         => 'bar',
+            'region'         => 'us-west-1',
+            'client.backoff' => false,
+            'base_url'       => 'http://localhost:123',
+            'curl.options'   => array(CURLOPT_TIMEOUT_MS => 1)
+        ));
+        $client->listTables();
     }
 }
